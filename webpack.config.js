@@ -9,7 +9,10 @@ export default {
     filename: 'myapp.js',
     path: path.resolve(import.meta.dirname, 'dist'),
     clean: true,
-    publicPath: '/daymark/',
+    publicPath: './',
+  },
+  devServer: {
+    historyApiFallback: true,
   },
   plugins: [
     new HtmlWebpackPlugin({

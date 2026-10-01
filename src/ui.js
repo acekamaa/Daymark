@@ -4,6 +4,49 @@ const app = document.querySelector('#app');
 let selectedProject = null;
 let activeFilter = 'all';
 let searchTerm = '';
+let signedInAs = '';
+
+const loginScreen = document.createElement('section');
+loginScreen.className = 'login-screen';
+loginScreen.innerHTML = `
+  <div class="login-story">
+    <a class="brand login-brand" href="#top"><span class="brand-mark" aria-hidden="true">d</span><span>daymark</span></a>
+    <div class="login-story-content">
+      <p class="login-eyebrow">MAKE ROOM FOR WHAT MATTERS</p>
+      <h1>A calmer place<br>to get it done.</h1>
+      <p class="login-story-copy">Bring your plans into focus, one thoughtful step at a time.</p>
+      <div class="login-preview" aria-hidden="true">
+        <div class="preview-heading"><span>Today, at your pace</span><span>03</span></div>
+        <div class="preview-task"><span class="preview-check is-checked">✓</span><span>Make a little room</span><span class="preview-tag tag-mint">DONE</span></div>
+        <div class="preview-task"><span class="preview-check"></span><span>Choose what matters</span><span class="preview-tag tag-yellow">NEXT</span></div>
+        <div class="preview-task"><span class="preview-check"></span><span>Take it one step at a time</span><span class="preview-tag tag-coral">LATER</span></div>
+      </div>
+    </div>
+    <p class="login-story-footer">A little more clarity, every day.</p>
+  </div>
+  <div class="login-panel">
+    <div class="login-form-wrap">
+      <p class="login-kicker">YOUR WORKSPACE</p>
+      <h2>Welcome back.</h2>
+      <p class="login-intro">Sign in to pick up where you left off.</p>
+      <form class="login-form" id="login-form">
+        <label class="login-field" for="login-email">Email address
+          <input id="login-email" name="email" type="text" inputmode="email" autocomplete="username" placeholder="you@example.com">
+        </label>
+        <label class="login-field" for="login-password">Password
+          <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password">
+        </label>
+        <button class="primary-button login-submit" type="submit">Enter daymark <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="login-footnote">Your projects and tasks stay saved in this browser.</p>
+    </div>
+    <p class="login-panel-footer">DAYMARK <span aria-hidden="true">·</span> A CLEARER KIND OF TO-DO LIST</p>
+  </div>`;
+const loginForm = loginScreen.querySelector('#login-form');
+const loginEmail = loginScreen.querySelector('#login-email');
+const loginPassword = loginScreen.querySelector('#login-password');
+app.replaceChildren(loginScreen);
+document.title = 'Sign in | daymark';
 
 const shell = document.createElement('div');
 shell.className = 'app-shell';
@@ -16,13 +59,13 @@ sidebar.innerHTML = `
   <div class="project-heading">PROJECTS</div>
   <nav class="project-navigation" aria-label="Projects"></nav>
   <button class="new-project-button" type="button"><span aria-hidden="true">+</span> New project</button>
-  <div class="sidebar-footer"><span class="footer-dot" aria-hidden="true"></span>Saved in this browser</div>`;
+  <div class="sidebar-footer"><span class="footer-dot" aria-hidden="true"></span><span class="sidebar-user"></span></div>`;
 
 const main = document.createElement('main');
 main.className = 'main-panel';
 main.id = 'top';
 main.innerHTML = `
-  <header class="topbar"><p class="today-label"></p><button class="primary-button new-task-button" type="button"><span aria-hidden="true">+</span> New task</button></header>
+  <header class="topbar"><p class="today-label"></p><div class="topbar-actions"><button class="quiet-button sign-out-button" type="button">Sign out</button><button class="primary-button new-task-button" type="button"><span aria-hidden="true">+</span> New task</button></div></header>
   <section class="page-heading"><p class="eyebrow">A LITTLE MORE CLARITY</p><h1></h1><p class="heading-subtitle"></p></section>
   <section class="stats-grid" aria-label="Task summary">
     <div class="stat-card stat-mint"><strong id="stat-open">0</strong><span>To do</span></div>
@@ -43,7 +86,6 @@ main.innerHTML = `
   </section>`;
 
 shell.append(sidebar, main);
-app.replaceChildren(shell);
 
 const allTasksButton = sidebar.querySelector('#all-tasks');
 const projectNavigation = sidebar.querySelector('.project-navigation');
@@ -56,6 +98,7 @@ const visibleCount = main.querySelector('.visible-count');
 const statOpen = main.querySelector('#stat-open');
 const statDone = main.querySelector('#stat-done');
 const statProjects = main.querySelector('#stat-projects');
+const sidebarUser = sidebar.querySelector('.sidebar-user');
 
 main.querySelector('.today-label').textContent = new Intl.DateTimeFormat(undefined, {
   weekday: 'long',
@@ -231,6 +274,7 @@ function render() {
   statOpen.textContent = String(allTodos.filter((todo) => todo.status !== 'completed').length);
   statDone.textContent = String(allTodos.filter((todo) => todo.status === 'completed').length);
   statProjects.textContent = String(projects.length);
+  sidebarUser.textContent = signedInAs || 'Your workspace';
   document.title = `${selectedProject?.name ?? 'Your tasks'} | daymark`;
   renderSidebar();
   renderTasks();
@@ -396,4 +440,17 @@ filterGroup.addEventListener('click', (event) => {
   renderTasks();
 });
 
-render();
+loginForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  signedInAs = loginEmail.value.trim();
+  app.replaceChildren(shell);
+  render();
+});
+
+main.querySelector('.sign-out-button').addEventListener('click', () => {
+  loginEmail.value = signedInAs;
+  loginPassword.value = '';
+  app.replaceChildren(loginScreen);
+  document.title = 'Sign in | daymark';
+  loginEmail.focus();
+});

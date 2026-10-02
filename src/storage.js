@@ -1,21 +1,40 @@
 const STORAGE_KEY = 'todo-list-app.projects';
+let storageReadError = '';
+
+export function getStorageReadError() {
+  return storageReadError;
+}
 
 export function loadProjects() {
+  storageReadError = '';
   try {
-    const savedProjects = globalThis.localStorage?.getItem(STORAGE_KEY);
-    if (savedProjects === null || savedProjects === undefined) {
+    const storage = globalThis.localStorage;
+    if (!storage) {
+      storageReadError = 'Browser storage is unavailable. Changes will only last for this session.';
       return null;
     }
 
+    const savedProjects = storage.getItem(STORAGE_KEY);
+    if (savedProjects === null) return null;
+
     const projects = JSON.parse(savedProjects);
-    return Array.isArray(projects) ? projects : null;
+    if (!Array.isArray(projects)) {
+      storageReadError = 'Saved projects could not be read. Create a new project to continue.';
+      return null;
+    }
+
+    return projects;
   } catch {
+    storageReadError = 'Saved projects could not be read. Changes may only last for this session.';
     return null;
   }
 }
 
 export function saveProjects(projects) {
   try {
+    const storage = globalThis.localStorage;
+    if (!storage) return false;
+
     const savedProjects = projects.map((project) => ({
       name: project.name,
       todos: project.todos.map((todo) => ({
@@ -28,8 +47,8 @@ export function saveProjects(projects) {
       })),
     }));
 
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(savedProjects));
-    return typeof globalThis.localStorage !== 'undefined';
+    storage.setItem(STORAGE_KEY, JSON.stringify(savedProjects));
+    return true;
   } catch {
     return false;
   }

@@ -1,20 +1,10 @@
-import { Project, persistProjects, projects, Todo } from './store.js';
-import { createLoginScreen } from './login.js';
+import { Project, persistProjects, projects, storageLoadError, Todo } from './store.js';
 
 const app = document.querySelector('#app');
 let selectedProject = null;
 let activeFilter = 'all';
 let searchTerm = '';
-let signedInAs = '';
-
-const {
-  element: loginScreen,
-  form: loginForm,
-  email: loginEmail,
-  password: loginPassword,
-} = createLoginScreen();
-app.replaceChildren(loginScreen);
-document.title = 'Sign in | daymark';
+let storageMessage = storageLoadError;
 
 const shell = document.createElement('div');
 shell.className = 'app-shell';
@@ -27,13 +17,14 @@ sidebar.innerHTML = `
   <div class="project-heading">PROJECTS</div>
   <nav class="project-navigation" aria-label="Projects"></nav>
   <button class="new-project-button" type="button"><span aria-hidden="true">+</span> New project</button>
-  <div class="sidebar-footer"><span class="footer-dot" aria-hidden="true"></span><span class="sidebar-user"></span></div>`;
+  <div class="sidebar-footer"><span class="footer-dot" aria-hidden="true"></span><span class="sidebar-user">Your workspace</span></div>`;
 
 const main = document.createElement('main');
 main.className = 'main-panel';
 main.id = 'top';
 main.innerHTML = `
-  <header class="topbar"><p class="today-label"></p><div class="topbar-actions"><button class="quiet-button sign-out-button" type="button">Sign out</button><button class="primary-button new-task-button" type="button"><span aria-hidden="true">+</span> New task</button></div></header>
+  <header class="topbar"><p class="today-label"></p><div class="topbar-actions"><button class="primary-button new-task-button" type="button"><span aria-hidden="true">+</span> New task</button></div></header>
+  <p class="app-notice" role="status" aria-live="polite" hidden></p>
   <section class="page-heading"><p class="eyebrow">A LITTLE MORE CLARITY</p><h1></h1><p class="heading-subtitle"></p></section>
   <section class="stats-grid" aria-label="Task summary">
     <div class="stat-card stat-mint"><strong id="stat-open">0</strong><span>To do</span></div>
@@ -66,7 +57,7 @@ const visibleCount = main.querySelector('.visible-count');
 const statOpen = main.querySelector('#stat-open');
 const statDone = main.querySelector('#stat-done');
 const statProjects = main.querySelector('#stat-projects');
-const sidebarUser = sidebar.querySelector('.sidebar-user');
+const appNotice = main.querySelector('.app-notice');
 
 main.querySelector('.today-label').textContent = new Intl.DateTimeFormat(undefined, {
   weekday: 'long',
@@ -85,6 +76,12 @@ function button(label, className, handler) {
 
 function entriesForAllProjects() {
   return projects.flatMap((project) => project.todos.map((todo) => ({ project, todo })));
+}
+
+function saveChanges() {
+  storageMessage = persistProjects()
+    ? ''
+    : 'Changes could not be saved. They will be lost when you leave this browser.';
 }
 
 function renderSidebar() {
@@ -117,7 +114,7 @@ function renderSidebar() {
     const deleteButton = button('×', 'project-remove', () => {
       const projectIndex = projects.indexOf(project);
       if (projectIndex !== -1) projects.splice(projectIndex, 1);
-      persistProjects();
+      saveChanges();
       render();
     });
     deleteButton.setAttribute('aria-label', `Delete ${project.name}`);
@@ -154,17 +151,36 @@ function renderTasks() {
     mark.className = 'empty-mark';
     mark.textContent = searchTerm ? '⌕' : '✳';
     const title = document.createElement('h3');
-    title.textContent = searchTerm
-      ? 'Nothing found'
-      : activeFilter === 'done'
-        ? 'No completed tasks yet'
-        : 'A clear page';
     const message = document.createElement('p');
-    message.textContent = searchTerm
-      ? 'Try another search.'
-      : 'Add a task when you are ready to begin.';
+    if (searchTerm) {
+      title.textContent = 'No matching tasks';
+      message.textContent = 'Try another search or clear the current query.';
+    } else if (source.length === 0 && selectedProject) {
+      title.textContent = 'This project is empty';
+      message.textContent = 'Add a task whenever you are ready to begin.';
+    } else if (source.length === 0 && projects.length === 0) {
+      title.textContent = 'Start with a project';
+      message.textContent = 'Create a project to keep related tasks together.';
+    } else if (source.length === 0) {
+      title.textContent = 'No tasks yet';
+      message.textContent = 'Add a task to one of your projects to get started.';
+    } else if (activeFilter === 'done') {
+      title.textContent = 'No completed tasks yet';
+      message.textContent = 'Completed tasks will appear here.';
+    } else {
+      title.textContent = 'All caught up';
+      message.textContent = 'Everything is complete. Add another task when you are ready.';
+    }
     empty.append(mark, title, message);
-    if (!searchTerm && activeFilter !== 'done') {
+    if (searchTerm) {
+      empty.append(
+        button('Clear search', 'text-button', () => {
+          searchInput.value = '';
+          searchTerm = '';
+          renderTasks();
+        })
+      );
+    } else if (source.length === 0 || activeFilter !== 'done') {
       empty.append(
         button(projects.length ? 'Add a task' : 'Create your first project', 'text-button', () => {
           if (projects.length) openTaskDialog(selectedProject ?? projects[0]);
@@ -183,7 +199,7 @@ function renderTasks() {
 
     const toggle = button('', 'completion-toggle', () => {
       todo.toggleStatus();
-      persistProjects();
+      saveChanges();
       render();
     });
     toggle.setAttribute(
@@ -223,7 +239,7 @@ function renderTasks() {
       button('Edit', 'quiet-button', () => openTaskDialog(project, todo)),
       button('Delete', 'quiet-button delete-button', () => {
         project.removeTodo(todo);
-        persistProjects();
+        saveChanges();
         render();
       })
     );
@@ -242,8 +258,9 @@ function render() {
   statOpen.textContent = String(allTodos.filter((todo) => todo.status !== 'completed').length);
   statDone.textContent = String(allTodos.filter((todo) => todo.status === 'completed').length);
   statProjects.textContent = String(projects.length);
-  sidebarUser.textContent = signedInAs || 'Your workspace';
   document.title = `${selectedProject?.name ?? 'Your tasks'} | daymark`;
+  appNotice.textContent = storageMessage;
+  appNotice.hidden = !storageMessage;
   renderSidebar();
   renderTasks();
 }
@@ -255,6 +272,15 @@ function field(labelText, control) {
   text.textContent = labelText;
   label.append(text, control);
   return label;
+}
+
+function requireNonWhitespace(control, message) {
+  control.required = true;
+  const validate = () => {
+    control.setCustomValidity(control.value.trim() ? '' : message);
+  };
+  control.addEventListener('input', validate);
+  control.addEventListener('change', validate);
 }
 
 function openDialog(titleText, subtitle, buildFields, save, saveLabel) {
@@ -294,6 +320,7 @@ function openDialog(titleText, subtitle, buildFields, save, saveLabel) {
   form.append(fields, actions);
   form.addEventListener('submit', (event) => {
     event.preventDefault();
+    if (!form.reportValidity()) return;
     save();
     overlay.remove();
   });
@@ -308,7 +335,7 @@ function openProjectDialog() {
   name.type = 'text';
   name.placeholder = 'e.g. Home refresh';
   name.maxLength = 48;
-  name.required = true;
+  requireNonWhitespace(name, 'Enter a project name.');
   openDialog(
     'A new project',
     'Give this collection a name.',
@@ -319,7 +346,7 @@ function openProjectDialog() {
       const project = new Project(name.value.trim());
       projects.push(project);
       selectedProject = project;
-      persistProjects();
+      saveChanges();
       render();
     },
     'Create project'
@@ -332,7 +359,7 @@ function openTaskDialog(project, todo = null) {
   title.placeholder = 'What needs doing?';
   title.value = todo?.title ?? '';
   title.maxLength = 120;
-  title.required = true;
+  requireNonWhitespace(title, 'Enter a task name.');
   const notes = document.createElement('textarea');
   notes.placeholder = 'Add a note or a little context';
   notes.value = todo?.description ?? '';
@@ -349,6 +376,7 @@ function openTaskDialog(project, todo = null) {
     option.selected = (todo?.priority ?? 'medium') === level;
     priority.append(option);
   }
+  priority.required = true;
   openDialog(
     todo ? 'Edit task' : 'New task',
     `In ${project.name}`,
@@ -375,7 +403,7 @@ function openTaskDialog(project, todo = null) {
       } else {
         project.addTodo(updated);
       }
-      persistProjects();
+      saveChanges();
       render();
     },
     todo ? 'Save changes' : 'Add task'
@@ -408,17 +436,5 @@ filterGroup.addEventListener('click', (event) => {
   renderTasks();
 });
 
-loginForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  signedInAs = loginEmail.value.trim();
-  app.replaceChildren(shell);
-  render();
-});
-
-main.querySelector('.sign-out-button').addEventListener('click', () => {
-  loginEmail.value = signedInAs;
-  loginPassword.value = '';
-  app.replaceChildren(loginScreen);
-  document.title = 'Sign in | daymark';
-  loginEmail.focus();
-});
+app.replaceChildren(shell);
+render();

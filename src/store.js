@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { loadProjects, saveProjects } from './storage.js';
+import { getStorageReadError, loadProjects, saveProjects } from './storage.js';
 
 export class Project {
   constructor(name) {
@@ -76,17 +76,18 @@ function restoreProject(savedProject) {
 }
 
 const savedProjects = loadProjects();
+export const storageLoadError = getStorageReadError();
 export const projects =
   savedProjects === null
     ? []
     : savedProjects.map(restoreProject).filter((project) => project !== null);
 
 export const defaultProject =
-  savedProjects === null
+  savedProjects === null && !storageLoadError
     ? new Project('Default')
     : (projects.find((project) => project.name === 'Default') ?? projects[0] ?? null);
 
-if (savedProjects === null) {
+if (savedProjects === null && !storageLoadError) {
   const defaultTodo = new Todo('Welcome', 'This is where your notes goes', '2026-07-24', 'low');
   defaultProject.addTodo(defaultTodo);
   projects.push(defaultProject);

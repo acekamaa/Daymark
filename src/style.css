@@ -278,6 +278,17 @@ select:focus-visible {
   box-shadow: 0 0 0 3px #5487751c;
 }
 
+.login-field input:required:user-invalid,
+.form-field :required:user-invalid {
+  border-color: #c64f43;
+  box-shadow: 0 0 0 3px #c64f4318;
+}
+
+.login-field input:required:user-valid,
+.form-field :required:user-valid {
+  border-color: #548775;
+}
+
 .login-submit {
   width: 100%;
   min-height: 46px;
@@ -544,6 +555,17 @@ select:focus-visible {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
+}
+
+.app-notice {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  color: #8f4939;
+  background: #f9e8e2;
+  border-left: 3px solid var(--coral);
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .primary-button,

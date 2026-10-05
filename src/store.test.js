@@ -62,10 +62,34 @@ test('local storage saves and restores project and todo data', () => {
               dueDate: '2026-09-02',
               priority: 'high',
               status: 'completed',
+              deletedAt: null,
             },
           ],
         },
       ]);
+    }
+  );
+});
+
+test('soft-deleted todos retain their deletion timestamp through storage', () => {
+  const values = new Map();
+  withLocalStorage(
+    {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+    },
+    () => {
+      const todo = new Todo('Ship feature', '', '2026-09-02', 'high');
+      const project = new Project('Work');
+      project.addTodo(todo);
+      todo.softDelete();
+
+      assert.match(todo.deletedAt, /^\d{4}-\d{2}-\d{2}T/);
+      assert.equal(saveProjects([project]), true);
+      assert.equal(loadProjects()[0].todos[0].deletedAt, todo.deletedAt);
+
+      todo.restore();
+      assert.equal(todo.deletedAt, null);
     }
   );
 });

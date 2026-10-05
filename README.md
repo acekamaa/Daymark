@@ -1,6 +1,6 @@
 # Daymark Todo List
 
-A small webpack todo app with project grouping, task filtering, completion tracking, and browser `localStorage` persistence.
+A small webpack todo app with project grouping, task filtering, completion tracking, and browser `localStorage` persistence. Deleted tasks move to the Bin with their deletion timestamp, where they can be restored or permanently removed.
 
 ## Commands
 

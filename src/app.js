@@ -4,6 +4,7 @@ const app = document.querySelector('#app');
 let selectedProject = null;
 let activeFilter = 'all';
 let searchTerm = '';
+let isBinView = false;
 let storageMessage = storageLoadError;
 
 const shell = document.createElement('div');
@@ -13,7 +14,10 @@ sidebar.className = 'sidebar';
 sidebar.innerHTML = `
   <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">d</span><span>daymark</span></a>
   <p class="sidebar-caption">YOUR WORKSPACE</p>
-  <button class="navigation-link is-active" id="all-tasks" type="button"><span class="nav-symbol" aria-hidden="true">◷</span><span>All tasks</span><span class="nav-count"></span></button>
+  <div class="workspace-navigation">
+    <button class="navigation-link is-active" id="all-tasks" type="button"><span class="nav-symbol" aria-hidden="true">◷</span><span>All tasks</span><span class="nav-count"></span></button>
+    <button class="navigation-link" id="bin-tasks" type="button"><span class="nav-symbol" aria-hidden="true">▱</span><span>Bin</span><span class="nav-count"></span></button>
+  </div>
   <div class="project-heading">PROJECTS</div>
   <nav class="project-navigation" aria-label="Projects"></nav>
   <button class="new-project-button" type="button"><span aria-hidden="true">+</span> New project</button>
@@ -47,6 +51,7 @@ main.innerHTML = `
 shell.append(sidebar, main);
 
 const allTasksButton = sidebar.querySelector('#all-tasks');
+const binTasksButton = sidebar.querySelector('#bin-tasks');
 const projectNavigation = sidebar.querySelector('.project-navigation');
 const headingTitle = main.querySelector('h1');
 const headingSubtitle = main.querySelector('.heading-subtitle');
@@ -78,6 +83,10 @@ function entriesForAllProjects() {
   return projects.flatMap((project) => project.todos.map((todo) => ({ project, todo })));
 }
 
+function activeEntries() {
+  return entriesForAllProjects().filter(({ todo }) => !todo.deletedAt);
+}
+
 function saveChanges() {
   storageMessage = persistProjects()
     ? ''
@@ -86,9 +95,13 @@ function saveChanges() {
 
 function renderSidebar() {
   allTasksButton.querySelector('.nav-count').textContent = String(
-    entriesForAllProjects().filter(({ todo }) => todo.status !== 'completed').length
+    activeEntries().filter(({ todo }) => todo.status !== 'completed').length
   );
-  allTasksButton.classList.toggle('is-active', selectedProject === null);
+  binTasksButton.querySelector('.nav-count').textContent = String(
+    entriesForAllProjects().filter(({ todo }) => todo.deletedAt).length
+  );
+  allTasksButton.classList.toggle('is-active', !isBinView && selectedProject === null);
+  binTasksButton.classList.toggle('is-active', isBinView);
   projectNavigation.replaceChildren();
 
   projects.forEach((project, index) => {
@@ -105,9 +118,12 @@ function renderSidebar() {
     name.textContent = project.name;
     const count = document.createElement('span');
     count.className = 'nav-count';
-    count.textContent = String(project.todos.filter((todo) => todo.status !== 'completed').length);
+    count.textContent = String(
+      project.todos.filter((todo) => !todo.deletedAt && todo.status !== 'completed').length
+    );
     projectButton.append(marker, name, count);
     projectButton.addEventListener('click', () => {
+      isBinView = false;
       selectedProject = project;
       render();
     });
@@ -124,24 +140,32 @@ function renderSidebar() {
 }
 
 function renderTasks() {
-  const source = selectedProject
-    ? selectedProject.todos.map((todo) => ({ project: selectedProject, todo }))
-    : entriesForAllProjects();
+  const source = isBinView
+    ? entriesForAllProjects().filter(({ todo }) => todo.deletedAt)
+    : (selectedProject
+        ? selectedProject.todos.map((todo) => ({ project: selectedProject, todo }))
+        : entriesForAllProjects()
+      ).filter(({ todo }) => !todo.deletedAt);
   const entries = source
     .filter(
       ({ todo }) =>
+        isBinView ||
         activeFilter === 'all' ||
         (activeFilter === 'done' ? todo.status === 'completed' : todo.status !== 'completed')
     )
     .filter(({ project, todo }) =>
       `${todo.title} ${todo.description} ${project.name}`.toLowerCase().includes(searchTerm)
     )
-    .sort(
-      (a, b) =>
+    .sort((a, b) => {
+      if (isBinView) return b.todo.deletedAt.localeCompare(a.todo.deletedAt);
+      return (
         Number(a.todo.status === 'completed') - Number(b.todo.status === 'completed') ||
         a.todo.dueDate.localeCompare(b.todo.dueDate)
-    );
+      );
+    });
 
+  main.querySelector('.list-title-wrap h2').textContent = isBinView ? 'Bin' : 'Task list';
+  filterGroup.hidden = isBinView;
   visibleCount.textContent = `${entries.length} ${entries.length === 1 ? 'item' : 'items'}`;
   taskList.replaceChildren();
   if (entries.length === 0) {
@@ -152,7 +176,11 @@ function renderTasks() {
     mark.textContent = searchTerm ? '⌕' : '✳';
     const title = document.createElement('h3');
     const message = document.createElement('p');
-    if (searchTerm) {
+    if (isBinView && !searchTerm) {
+      title.textContent = 'Your bin is empty';
+      message.textContent =
+        'Tasks you delete will appear here. You can restore them or delete them permanently.';
+    } else if (searchTerm) {
       title.textContent = 'No matching tasks';
       message.textContent = 'Try another search or clear the current query.';
     } else if (source.length === 0 && selectedProject) {
@@ -180,7 +208,7 @@ function renderTasks() {
           renderTasks();
         })
       );
-    } else if (source.length === 0 || activeFilter !== 'done') {
+    } else if (!isBinView && (source.length === 0 || activeFilter !== 'done')) {
       empty.append(
         button(projects.length ? 'Add a task' : 'Create your first project', 'text-button', () => {
           if (projects.length) openTaskDialog(selectedProject ?? projects[0]);
@@ -198,10 +226,12 @@ function renderTasks() {
     row.style.animationDelay = `${Math.min(index, 8) * 25}ms`;
 
     const toggle = button('', 'completion-toggle', () => {
+      if (isBinView) return;
       todo.toggleStatus();
       saveChanges();
       render();
     });
+    toggle.disabled = isBinView;
     toggle.setAttribute(
       'aria-label',
       todo.status === 'completed' ? `Reopen ${todo.title}` : `Complete ${todo.title}`
@@ -219,7 +249,7 @@ function renderTasks() {
 
     const metadata = document.createElement('div');
     metadata.className = 'task-metadata';
-    if (!selectedProject) {
+    if (!selectedProject || isBinView) {
       const projectName = document.createElement('span');
       projectName.className = 'task-project';
       projectName.textContent = project.name;
@@ -227,7 +257,12 @@ function renderTasks() {
     }
     const date = document.createElement('span');
     date.className = 'task-date';
-    date.textContent = todo.generateFormattedDate();
+    date.textContent = isBinView
+      ? `Deleted ${new Intl.DateTimeFormat(undefined, {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(new Date(todo.deletedAt))}`
+      : todo.generateFormattedDate();
     const priority = document.createElement('span');
     priority.className = `priority-tag priority-${todo.priority}`;
     priority.textContent = todo.priority;
@@ -235,14 +270,29 @@ function renderTasks() {
 
     const actions = document.createElement('div');
     actions.className = 'task-actions';
-    actions.append(
-      button('Edit', 'quiet-button', () => openTaskDialog(project, todo)),
-      button('Delete', 'quiet-button delete-button', () => {
-        project.removeTodo(todo);
-        saveChanges();
-        render();
-      })
-    );
+    if (isBinView) {
+      actions.append(
+        button('Restore', 'quiet-button', () => {
+          todo.restore();
+          saveChanges();
+          render();
+        }),
+        button('Delete permanently', 'quiet-button delete-button', () => {
+          project.removeTodo(todo);
+          saveChanges();
+          render();
+        })
+      );
+    } else {
+      actions.append(
+        button('Edit', 'quiet-button', () => openTaskDialog(project, todo)),
+        button('Delete', 'quiet-button delete-button', () => {
+          todo.softDelete();
+          saveChanges();
+          render();
+        })
+      );
+    }
     row.append(toggle, details, metadata, actions);
     taskList.append(row);
   });
@@ -250,15 +300,18 @@ function renderTasks() {
 
 function render() {
   if (selectedProject && !projects.includes(selectedProject)) selectedProject = null;
-  const allTodos = entriesForAllProjects().map(({ todo }) => todo);
-  headingTitle.textContent = selectedProject ? selectedProject.name : 'Your tasks';
-  headingSubtitle.textContent = selectedProject
-    ? `${selectedProject.todos.filter((todo) => todo.status !== 'completed').length} still on your list.`
-    : 'Make space for what matters today.';
+  const allTodos = activeEntries().map(({ todo }) => todo);
+  headingTitle.textContent = isBinView ? 'Bin' : selectedProject ? selectedProject.name : 'Your tasks';
+  headingSubtitle.textContent = isBinView
+    ? `${entriesForAllProjects().filter(({ todo }) => todo.deletedAt).length} deleted tasks.`
+    : selectedProject
+      ? `${selectedProject.todos.filter((todo) => !todo.deletedAt && todo.status !== 'completed').length} still on your list.`
+      : 'Make space for what matters today.';
   statOpen.textContent = String(allTodos.filter((todo) => todo.status !== 'completed').length);
   statDone.textContent = String(allTodos.filter((todo) => todo.status === 'completed').length);
   statProjects.textContent = String(projects.length);
-  document.title = `${selectedProject?.name ?? 'Your tasks'} | daymark`;
+  document.title = `${isBinView ? 'Bin' : selectedProject?.name ?? 'Your tasks'} | daymark`;
+  main.querySelector('.new-task-button').hidden = isBinView;
   appNotice.textContent = storageMessage;
   appNotice.hidden = !storageMessage;
   renderSidebar();
@@ -345,6 +398,7 @@ function openProjectDialog() {
     () => {
       const project = new Project(name.value.trim());
       projects.push(project);
+      isBinView = false;
       selectedProject = project;
       saveChanges();
       render();
@@ -411,6 +465,12 @@ function openTaskDialog(project, todo = null) {
 }
 
 allTasksButton.addEventListener('click', () => {
+  isBinView = false;
+  selectedProject = null;
+  render();
+});
+binTasksButton.addEventListener('click', () => {
+  isBinView = true;
   selectedProject = null;
   render();
 });

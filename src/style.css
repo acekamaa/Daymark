@@ -405,6 +405,10 @@ select:focus-visible {
 .navigation-link.is-active {
   box-shadow: inset 3px 0 #d6ed9c;
 }
+.workspace-navigation {
+  display: grid;
+  gap: 3px;
+}
 .nav-symbol {
   width: 17px;
   color: #d6ed9c;
@@ -585,6 +589,11 @@ select:focus-visible {
   transition:
     transform 150ms ease,
     background 150ms ease;
+}
+
+.filter-group[hidden],
+.new-task-button[hidden] {
+  display: none;
 }
 
 .primary-button:hover {
@@ -811,6 +820,10 @@ select:focus-visible {
 .completion-toggle:hover {
   border-color: #548775;
   transform: scale(1.08);
+}
+.completion-toggle:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 .completion-toggle[aria-pressed='true'] {
   background: #548775;
@@ -1182,17 +1195,20 @@ select:focus-visible {
   .sidebar-footer {
     display: none;
   }
-  .navigation-link:not(.project-link) {
+  .workspace-navigation {
     grid-column: 1 / -1;
     grid-row: 2;
-    justify-self: start;
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .workspace-navigation .navigation-link {
     width: auto;
     min-height: 34px;
-    margin-top: 8px;
     padding: 0 9px;
     font-size: 11px;
   }
-  .navigation-link:not(.project-link) .nav-count {
+  .workspace-navigation .nav-count {
     display: none;
   }
   .project-navigation {

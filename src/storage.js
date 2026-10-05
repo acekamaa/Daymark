@@ -44,6 +44,7 @@ export function saveProjects(projects) {
         dueDate: todo.dueDate,
         priority: todo.priority,
         status: todo.status,
+        deletedAt: todo.deletedAt,
       })),
     }));
 

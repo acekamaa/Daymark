@@ -31,10 +31,19 @@ export class Todo {
     this.dueDate = dueDate;
     this.priority = priority;
     this.status = status;
+    this.deletedAt = null;
   }
 
   toggleStatus() {
     this.status = this.status === 'pending' ? 'completed' : 'pending';
+  }
+
+  softDelete() {
+    this.deletedAt = new Date().toISOString();
+  }
+
+  restore() {
+    this.deletedAt = null;
   }
 
   generateFormattedDate() {
@@ -68,6 +77,9 @@ function restoreProject(savedProject) {
       );
       if (typeof todo.id === 'string') {
         restoredTodo.id = todo.id;
+      }
+      if (typeof todo.deletedAt === 'string' && Number.isFinite(Date.parse(todo.deletedAt))) {
+        restoredTodo.deletedAt = todo.deletedAt;
       }
       return restoredTodo;
     });
